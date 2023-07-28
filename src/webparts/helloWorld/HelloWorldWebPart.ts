@@ -10,8 +10,15 @@ import { BaseClientSideWebPart } from '@microsoft/sp-webpart-base';
 import { IReadonlyTheme } from '@microsoft/sp-component-base';
 import { escape } from '@microsoft/sp-lodash-subset';
 
+
 import styles from './HelloWorldWebPart.module.scss';
 import * as strings from 'HelloWorldWebPartStrings';
+import {
+  SPHttpClient,
+  SPHttpClientResponse
+} from '@microsoft/sp-http';
+
+
 
 export interface IHelloWorldWebPartProps {
   description: string;
@@ -20,6 +27,16 @@ export interface IHelloWorldWebPartProps {
   test2: string;
   test3: boolean;
 }
+
+export interface ISPLists {
+  value: ISPList[];
+}
+
+export interface ISPList {
+  Title: string;
+  Id: string;
+}
+
 
 export default class HelloWorldWebPart extends BaseClientSideWebPart<IHelloWorldWebPartProps> {
 
@@ -40,16 +57,51 @@ export default class HelloWorldWebPart extends BaseClientSideWebPart<IHelloWorld
         <div>Web part test: <strong>${escape(this.properties.test)}</strong></div>
         <div>Loading from: <strong>${escape(this.context.pageContext.web.title)}</strong></div>
       </div>
+      <div id="spListContainer" />
     </section>`;
+    
+    this._renderListAsync();
   }
+
+
+  private _renderListAsync(): void {
+    this._getListData()
+      .then((response) => {
+        this._renderList(response.value);
+      })
+      .catch(() => {});
+  }
+
+
 
   protected onInit(): Promise<void> {
     return this._getEnvironmentMessage().then(message => {
       this._environmentMessage = message;
     });
   }
+  
+  private _getListData(): Promise<ISPLists> {
+    return this.context.spHttpClient.get(`${this.context.pageContext.web.absoluteUrl}/_api/web/lists?$filter=Hidden eq false`, SPHttpClient.configurations.v1)
+      .then((response: SPHttpClientResponse) => {
+        return response.json();
+      })
+      .catch(() => {});
+  }
 
-
+  private _renderList(items: ISPList[]): void {
+    let html: string = '';
+    items.forEach((item: ISPList) => {
+      html += `
+    <ul class="${styles.list}">
+      <li class="${styles.listItem}">
+        <span class="ms-font-l">${item.Title}</span>
+      </li>
+    </ul>`;
+    });
+  
+    const listContainer: HTMLElement| null = this.domElement.querySelector('#spListContainer') as HTMLElement;
+    if (listContainer){listContainer.innerHTML = html;}
+  }
 
   private _getEnvironmentMessage(): Promise<string> {
     if (!!this.context.sdks.microsoftTeams) { // running in Teams, office.com or Outlook
